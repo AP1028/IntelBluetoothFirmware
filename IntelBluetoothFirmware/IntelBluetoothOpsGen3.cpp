@@ -52,15 +52,23 @@ bootloaderSetupTLV(IntelVersionTLV *verTLV)
      */
     bootParams = 0x00000000;
     
+    /* The image type is 0x01 for the bootloader and 0x03 for operational
+     * firmware.  Only the bootloader image type has anything to download, and
+     * the check for 0x03 used to sit after downloadFirmware(), where a failed
+     * download returned first and the case it was written for could never be
+     * reached.  That matters because downloadFirmwareData() answers a
+     * mismatch against the running operational firmware by calling
+     * resetToBootloader(), which resets a healthy controller and can drop it
+     * off the bus.
+     */
+    if (verTLV->img_type == 0x03) {
+        XYLog("Operational firmware already running (img_type 0x03); skipping download\n");
+        goto finish;
+    }
+
     if (!downloadFirmware(verTLV, &bootParams)) {
         XYLog("Download firmware failed\n");
         return false;
-    }
-    
-    /* check if controller is already having an operational firmware */
-    if (verTLV->img_type == 0x03) {
-        XYLog("Frimware is already running, finishing\n");
-        goto finish;
     }
     
     if (!intelBoot(bootParams)) {
