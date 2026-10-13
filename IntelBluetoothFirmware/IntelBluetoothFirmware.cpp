@@ -103,6 +103,31 @@ void IntelBluetoothFirmware::publishReg(bool isSucceed, const char *fwName)
     // Monterey+
     if (version_major >= 21)
         m_pDevice->setName("Bluetooth USB Host Controller");
+
+    /* bluetoothd tells Apple's internal Bluetooth module apart from a
+     * third-party USB dongle by the "USB Product Name" property: on a match
+     * against "Bluetooth USB Host Controller" it skips the device.  This driver
+     * used to publish exactly that name, so the controller could never be taken
+     * down the dongle path and was left on the internal profile, whose
+     * Broadcom-only vendor commands a non-Broadcom part cannot answer.
+     *
+     * Only the inequality matters; nothing compares against the name set below.
+     * Overwrite when there is nothing to preserve, so a controller that reports
+     * a real product string keeps it.
+     */
+    static const char *const kInternalControllerProduct =
+        "Bluetooth USB Host Controller";
+
+    OSString *marker = OSString::withCString(kInternalControllerProduct);
+    OSString *current = OSDynamicCast(OSString, m_pDevice->getProperty("USB Product Name"));
+
+    // A controller with no string descriptors has no product name to preserve.
+    if (current == NULL || current->isEqualTo(marker)) {
+        m_pDevice->setProperty("USB Product Name",
+                               OSString::withCString("Bluetooth HCI"));
+    }
+
+    OSSafeReleaseNULL(marker);
 }
 
 void IntelBluetoothFirmware::cleanUp()
